@@ -37,10 +37,23 @@ public final class OrderParser {
     private static final Pattern KM =
             Pattern.compile("(?<![~0-9.,])(?<!~\\s)([0-9]+(?:[.,][0-9]+)?)\\s*км(?![а-яa-z/])");
     private static final Pattern ETA =
-            Pattern.compile("^\\s*([0-9]{1,3})\\s*мин\\.?\\s*$");
+            Pattern.compile("^\\s*([0-9]{1,3})\\s*мин(\\.|ут[аы]?)?\\s*$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /** Неразрывные и узкие пробелы, переносы строк -> обычный пробел. */
+    public static String norm(String t) {
+        if (t == null) return null;
+        StringBuilder b = new StringBuilder(t.length());
+        for (char c : t.toCharArray()) {
+            if (c == '\u00A0' || c == '\u202F' || c == '\u2007' || c == '\u2009' || c == '\u200A') b.append(' ');
+            else if (c == '\u200B' || c == '\u200E' || c == '\u200F') continue;
+            else b.append(c);
+        }
+        return b.toString();
+    }
 
     /** Текст кнопки принятия по цене клиента? Встречные предложения не подходят. */
     public static boolean isAcceptText(String t) {
+        t = norm(t);
         if (t == null) return false;
         String low = t.toLowerCase(Locale.ROOT);
         if (low.contains("предлож") || low.contains("offer")) return false;
@@ -49,6 +62,7 @@ public final class OrderParser {
 
     /** Число минут на кнопке выбора времени, иначе -1. */
     public static int etaMinutes(String t) {
+        t = norm(t);
         if (t == null) return -1;
         Matcher m = ETA.matcher(t);
         return m.matches() ? Integer.parseInt(m.group(1)) : -1;
@@ -66,6 +80,10 @@ public final class OrderParser {
 
     public static Order parse(List<String> texts, String acceptText) {
         Order o = new Order();
+        List<String> nt = new ArrayList<>();
+        for (String t : texts) if (t != null) nt.add(norm(t));
+        texts = nt;
+        acceptText = norm(acceptText);
         Matcher am = ACCEPT.matcher(acceptText == null ? "" : acceptText);
         if (am.matches()) o.price = digits(am.group(2));
 

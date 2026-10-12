@@ -38,7 +38,7 @@ public class CatcherService extends AccessibilityService
 
     private static final long SCAN_GAP_MS = 40;       // не чаще, чтобы не лагало
     private static final long SAME_CARD_MS = 20000;   // одну карточку дважды не трогаем
-    private static final long ETA_WINDOW_MS = 15000;  // ждём окно «Как скоро вы прибудете?»
+    private static final long ETA_WINDOW_MS = 20000;  // ждём окно «Как скоро вы прибудете?»
     private static final int MAX_NODES = 800;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -128,8 +128,12 @@ public class CatcherService extends AccessibilityService
 
             if (click(btn)) {
                 acceptedAt = SystemClock.uptimeMillis();
+                final long mark = acceptedAt;
                 beep(true);
                 vibrate();
+                handler.postDelayed(() -> {
+                    if (acceptedAt == mark) { acceptedAt = 0; reportEtaMiss(); }
+                }, 6000);
             }
             return;
         }
@@ -192,6 +196,7 @@ public class CatcherService extends AccessibilityService
     /** Окно «Как скоро вы прибудете?» — нажать самое маленькое время. */
     private boolean pickMinEta(AccessibilityNodeInfo root) {
         List<AccessibilityNodeInfo> all = new ArrayList<>();
+        List<Integer> mins = new ArrayList<>();
         List<AccessibilityNodeInfo> stack = new ArrayList<>();
         stack.add(root);
         boolean isEtaScreen = false;
@@ -199,19 +204,34 @@ public class CatcherService extends AccessibilityService
         while (!stack.isEmpty() && seen++ < MAX_NODES) {
             AccessibilityNodeInfo n = stack.remove(stack.size() - 1);
             if (n == null) continue;
-            String t = str(n.getText()).toLowerCase(Locale.ROOT);
-            if (t.contains("прибуд") || t.contains("как скоро") || t.contains("how soon")) isEtaScreen = true;
-            if (OrderParser.etaMinutes(str(n.getText())) > 0 && n.isVisibleToUser()) all.add(n);
+            String t = OrderParser.norm(str(n.getText()));
+            String d = OrderParser.norm(str(n.getContentDescription()));
+            String low = (t + " " + d).toLowerCase(Locale.ROOT);
+            if (low.contains("прибуд") || low.contains("как скоро") || low.contains("how soon")
+                    || low.contains("қанша уақытта")) isEtaScreen = true;
+            int m = OrderParser.etaMinutes(t);
+            if (m <= 0) m = OrderParser.etaMinutes(d);
+            if (m > 0 && n.isVisibleToUser()) { all.add(n); mins.add(m); }
             for (int i = 0; i < n.getChildCount(); i++) stack.add(n.getChild(i));
         }
-        if (!isEtaScreen || all.isEmpty()) return false;
-        AccessibilityNodeInfo best = null;
-        int bestMin = Integer.MAX_VALUE;
-        for (AccessibilityNodeInfo n : all) {
-            int m = OrderParser.etaMinutes(str(n.getText()));
-            if (m < bestMin) { bestMin = m; best = n; }
+        // окно времени: заголовок найден, или видно минимум две кнопки «N мин.»
+        if (all.isEmpty() || (!isEtaScreen && all.size() < 2)) return false;
+        int best = 0;
+        for (int i = 1; i < mins.size(); i++) if (mins.get(i) < mins.get(best)) best = i;
+        return click(all.get(best));
+    }
+
+    /** Если окно времени не распознано — показать, что видно на экране (для настройки). */
+    private void reportEtaMiss() {
+        List<String> texts = new ArrayList<>();
+        for (AccessibilityNodeInfo r : inDriveRoots()) collect(r, texts, new int[]{0});
+        StringBuilder b = new StringBuilder("Уақыт батырмасы табылмады:\n");
+        int k = 0;
+        for (String t : texts) {
+            if (k++ >= 14) break;
+            b.append('[').append(OrderParser.norm(t).replace('\n', ' ')).append("] ");
         }
-        return best != null && click(best);
+        toast(b.toString());
     }
 
     // ---------------- нажатие ----------------
