@@ -13,6 +13,8 @@ public final class Prefs {
     public static final String MAX_KM = "max_km"; // 0 = шектеусіз
     public static final String HIDDEN = "hidden"; // плавающие кнопки закрыты через ✕
     public static final String PANEL = "panel";   // панель ҚОСУ/ӨШІРУ показана
+    public static final String LICENSE = "license"; // іске қосу кілті
+    public static final String BATTERY_ASKED = "battery_asked";
 
     public static final int MAX_KM_LIMIT = 30;
 

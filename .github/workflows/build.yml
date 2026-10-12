@@ -15,11 +15,12 @@ jobs:
           set -e
           J=app/src/main/java/kz/askhat/ustagysh
           R=app/src/main/res
-          mkdir -p $J $R/values $R/xml $R/drawable $R/mipmap-anydpi-v26
+          mkdir -p $J $R/values $R/xml $R/drawable $R/drawable-nodpi $R/mipmap-anydpi-v26
           mv *.java $J/
           mv AndroidManifest.xml app/src/main/
           mv catcher_config.xml $R/xml/
-          mv batyr_banner.xml batyr_icon.xml ic_launcher_bg.xml car_icon.xml $R/drawable/
+          mv shield_icon.xml ic_launcher_bg.xml $R/drawable/
+          mv *.png *.jpg $R/drawable-nodpi/
           mv ic_launcher.xml $R/mipmap-anydpi-v26/
           rm -f build.gradle settings.gradle gradle.properties
           cat > app/src/main/res/values/strings.xml <<'EOF'
@@ -60,8 +61,8 @@ jobs:
                   applicationId 'kz.askhat.ustagysh'
                   minSdk 26
                   targetSdk 34
-                  versionCode 4
-                  versionName '1.3'
+                  versionCode 5
+                  versionName '2.0'
               }
               signingConfigs {
                   fixed {

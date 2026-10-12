@@ -46,8 +46,11 @@ public class CatcherService extends AccessibilityService
     private long lastEtaTapAt = 0;
     private int etaTries = 0;
     private boolean etaSeen = false;
+    private long etaFirstSeenAt = 0;
+    private Rect lastEtaBounds = null;
 
     private Overlays overlays;
+    private boolean licensed = false; // кілтсіз ештеңе баспайды
 
     private final Runnable scanTask = () -> {
         scanPending = false;
@@ -64,6 +67,7 @@ public class CatcherService extends AccessibilityService
         super.onServiceConnected();
         prefs = Prefs.get(this);
         prefs.registerOnSharedPreferenceChangeListener(this);
+        licensed = License.isActive(this, prefs);
         try { tone = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100); } catch (Throwable ignored) {}
         vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         overlays = new Overlays(this, prefs);
@@ -72,7 +76,7 @@ public class CatcherService extends AccessibilityService
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent e) {
-        if (prefs == null || !Prefs.enabled(prefs) || e == null) return;
+        if (prefs == null || !licensed || !Prefs.enabled(prefs) || e == null) return;
         if (!isInDrive(e.getPackageName())) return;
         if (scanPending) return;
         scanPending = true;
@@ -87,7 +91,7 @@ public class CatcherService extends AccessibilityService
     // ---------------- основная логика ----------------
 
     private void scan() {
-        if (!Prefs.enabled(prefs)) return;
+        if (!licensed || !Prefs.enabled(prefs)) return;
         List<AccessibilityNodeInfo> roots = inDriveRoots();
         long now = SystemClock.uptimeMillis();
 
@@ -99,15 +103,26 @@ public class CatcherService extends AccessibilityService
                 if (eta != null) break;
             }
             if (eta != null) {
-                etaSeen = true;
+                if (!etaSeen) { etaSeen = true; etaFirstSeenAt = now; lastEtaBounds = null; }
+                Rect r = new Rect();
+                eta.getBoundsInScreen(r);
+                // окно выезжает снизу: касаться только когда оно остановилось
+                boolean settled = r.equals(lastEtaBounds) && now - etaFirstSeenAt >= 400;
+                lastEtaBounds = r;
                 if (now - lastEtaTapAt > 700 && etaTries < 5) {
-                    etaTries++;
-                    lastEtaTapAt = now;
-                    if (etaTries <= 2) tap(eta); else click(eta);
-                    handler.removeCallbacks(scanTask);
-                    scanPending = true;
-                    handler.postDelayed(scanTask, 800); // проверить, закрылось ли окно
+                    if (etaTries == 0) {
+                        etaTries++;                // 1) нажатие без координат
+                        lastEtaTapAt = now;
+                        actionClick(eta);
+                    } else if (settled) {
+                        etaTries++;                // 2) касание по месту, окно стоит
+                        lastEtaTapAt = now;
+                        tap(eta);
+                    }
                 }
+                handler.removeCallbacks(scanTask);
+                scanPending = true;
+                handler.postDelayed(scanTask, 250); // снова проверить окно
                 return;
             }
             if (etaTries > 0) { // нажимали, окна больше нет — готово
@@ -267,6 +282,16 @@ public class CatcherService extends AccessibilityService
         return dispatchGesture(g, null, null);
     }
 
+    /** Нажатие через доступность, без координат: сама кнопка или ближайший нажимаемый родитель. */
+    private boolean actionClick(AccessibilityNodeInfo node) {
+        AccessibilityNodeInfo n = node;
+        for (int i = 0; i < 4 && n != null; i++) {
+            if (n.isClickable()) return n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            n = n.getParent();
+        }
+        return false;
+    }
+
     private boolean click(AccessibilityNodeInfo node) {
         AccessibilityNodeInfo n = node;
         for (int i = 0; i < 6 && n != null; i++) {
@@ -308,6 +333,7 @@ public class CatcherService extends AccessibilityService
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences p, String key) {
+        if (Prefs.LICENSE.equals(key)) licensed = License.isActive(this, p);
         if (overlays != null) handler.post(overlays::refresh);
         if (Prefs.ENABLED.equals(key) && !Prefs.enabled(p)) {
             acceptedAt = 0;

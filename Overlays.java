@@ -6,7 +6,6 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -18,8 +17,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * Один блок поверх inDrive:
- *  [кнопка с машиной]  Баға 750 ₸+
+ * Один блок поверх inDrive (дизайн по картинкам):
+ *  [ҚОСУЛЫ / ӨШІРУЛІ]  Баға 750 ₸+
  *                      1 км 150 ₸+
  * Кнопка: тап — вкл/выкл (зелёная/красная). Надпись: тап — открыть приложение.
  * Тянуть — двигается весь блок. Бросить на ✕ — спросить и выйти.
@@ -40,9 +39,9 @@ final class Overlays {
 
     private LinearLayout block;
     private WindowManager.LayoutParams blockLp;
-    private LinearLayout button;
-    private TextView word, label;
-    private TextView trash;
+    private ImageView button;
+    private TextView label;
+    private ImageView trash;
     private View dialog;
 
     Overlays(Context ctx, SharedPreferences p) {
@@ -63,7 +62,7 @@ final class Overlays {
 
     void refresh() {
         try {
-            if (Prefs.hidden(p)) { removeBlock(); return; }
+            if (Prefs.hidden(p) || !License.isActive(ctx, p)) { removeBlock(); return; }
             if (block == null) addBlock();
             paint();
         } catch (Throwable ignored) {}
@@ -82,26 +81,16 @@ final class Overlays {
         block.setOrientation(LinearLayout.HORIZONTAL);
         block.setGravity(Gravity.CENTER_VERTICAL);
 
-        button = new LinearLayout(ctx);
-        button.setOrientation(LinearLayout.VERTICAL);
-        button.setGravity(Gravity.CENTER);
-        button.setPadding(px(6), px(6), px(6), px(5));
-        ImageView car = new ImageView(ctx);
-        car.setImageResource(R.drawable.car_icon);
-        button.addView(car, new LinearLayout.LayoutParams(px(50), px(21)));
-        word = new TextView(ctx);
-        word.setTextColor(Color.WHITE);
-        word.setTextSize(11);
-        word.setTypeface(Typeface.DEFAULT_BOLD);
-        word.setGravity(Gravity.CENTER);
-        button.addView(word);
-        block.addView(button, new LinearLayout.LayoutParams(px(72), px(56)));
+        button = new ImageView(ctx);
+        button.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        block.addView(button, new LinearLayout.LayoutParams(px(84), px(64)));
 
         label = new TextView(ctx);
         label.setTextColor(Color.WHITE);
-        label.setTextSize(15);
-        label.setTypeface(Typeface.DEFAULT_BOLD);
-        label.setShadowLayer(px(3), 0, 0, Color.BLACK);
+        label.setTextSize(17);
+        label.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
+        label.setShadowLayer(px(4), px(1), px(2), Color.parseColor("#E6000000"));
+        label.setLineSpacing(px(1), 1f);
         label.setPadding(px(8), px(2), px(8), px(2));
         block.addView(label);
 
@@ -121,12 +110,7 @@ final class Overlays {
     private void paint() {
         if (block == null) return;
         boolean on = Prefs.enabled(p);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(on ? GREEN : RED);
-        bg.setCornerRadius(px(14));
-        bg.setStroke(px(2), Color.WHITE);
-        button.setBackground(bg);
-        word.setText(on ? "ҚОСУЛЫ" : "ӨШІРУЛІ");
+        button.setImageResource(on ? R.drawable.ov_on : R.drawable.ov_off);
         label.setText(Prefs.label(p));
     }
 
@@ -190,13 +174,11 @@ final class Overlays {
     private void showTrash() {
         if (trash != null) return;
         try {
-            trash = new TextView(ctx);
-            trash.setText("✕");
-            trash.setTextColor(Color.WHITE);
-            trash.setTextSize(28);
-            trash.setGravity(Gravity.CENTER);
+            trash = new ImageView(ctx);
+            trash.setImageResource(R.drawable.ov_trash);
+            trash.setScaleType(ImageView.ScaleType.FIT_CENTER);
             paintTrash(false);
-            WindowManager.LayoutParams l = lp(px(68), px(68),
+            WindowManager.LayoutParams l = lp(px(76), px(76),
                     FLAGS | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
             l.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
             l.y = px(70);
@@ -204,13 +186,11 @@ final class Overlays {
         } catch (Throwable ignored) { trash = null; }
     }
 
+    /** Үстіне әкелгенде ✕ үлкейеді. */
     private void paintTrash(boolean hot) {
         if (trash == null) return;
-        GradientDrawable d = new GradientDrawable();
-        d.setShape(GradientDrawable.OVAL);
-        d.setColor(hot ? RED : Color.parseColor("#B3000000"));
-        d.setStroke(px(2), Color.WHITE);
-        trash.setBackground(d);
+        float s = hot ? 1.25f : 1f;
+        if (trash.getScaleX() != s) trash.animate().scaleX(s).scaleY(s).setDuration(90).start();
     }
 
     private boolean overTrash(MotionEvent e) {
@@ -230,71 +210,48 @@ final class Overlays {
 
     // ---------- подтверждение выхода ----------
 
-    private TextView pill(String text, int color) {
-        TextView t = new TextView(ctx);
-        t.setText(text);
-        t.setTextColor(Color.WHITE);
-        t.setTextSize(18);
-        t.setTypeface(Typeface.DEFAULT_BOLD);
-        t.setGravity(Gravity.CENTER);
-        t.setPadding(px(20), px(12), px(20), px(12));
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(color);
-        d.setCornerRadius(px(12));
-        t.setBackground(d);
-        return t;
-    }
-
+    /**
+     * «Шығасыз ба?» — дайын сурет-карточка. Батырмалар суреттің ішінде:
+     * ЖОҚ — сол жақ, ИӘ — оң жақ (үлесімен есептеледі).
+     */
     private void showConfirm() {
         if (dialog != null) return;
         try {
             FrameLayout dim = new FrameLayout(ctx);
-            dim.setBackgroundColor(Color.parseColor("#99000000"));
+            dim.setBackgroundColor(Color.parseColor("#B3000000"));
 
-            LinearLayout card = new LinearLayout(ctx);
-            card.setOrientation(LinearLayout.VERTICAL);
-            card.setPadding(px(22), px(20), px(22), px(18));
-            GradientDrawable bg = new GradientDrawable();
-            bg.setColor(Color.WHITE);
-            bg.setCornerRadius(px(18));
-            bg.setStroke(px(2), GOLD);
-            card.setBackground(bg);
+            ImageView card = new ImageView(ctx);
+            card.setImageResource(R.drawable.dlg_exit);
+            card.setAdjustViewBounds(true);
+            card.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            card.setElevation(px(8));
 
-            TextView title = new TextView(ctx);
-            title.setText("Шығасыз ба?");
-            title.setTextSize(26);
-            title.setTypeface(Typeface.DEFAULT_BOLD);
-            title.setTextColor(Color.BLACK);
-            title.setPadding(0, 0, 0, px(16));
-            card.addView(title);
-
-            LinearLayout row = new LinearLayout(ctx);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            TextView no = pill("ЖОҚ", Color.GRAY);
-            TextView yes = pill("ИӘ", RED);
-            LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            l1.setMargins(0, 0, px(8), 0);
-            LinearLayout.LayoutParams l2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            l2.setMargins(px(8), 0, 0, 0);
-            row.addView(no, l1);
-            row.addView(yes, l2);
-            card.addView(row);
-
-            FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
-            cl.setMargins(px(28), 0, px(28), 0);
+            FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(px(310),
+                    ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
             dim.addView(card, cl);
 
-            no.setOnClickListener(v -> closeDialog());
             dim.setOnClickListener(v -> closeDialog());
-            card.setOnClickListener(v -> { });
-            yes.setOnClickListener(v -> {
-                closeDialog();
-                p.edit().putBoolean(Prefs.ENABLED, false).putBoolean(Prefs.HIDDEN, true).apply();
+            card.setOnTouchListener((v, e) -> {
+                if (e.getActionMasked() != MotionEvent.ACTION_UP) return true;
+                float fx = e.getX() / Math.max(1, v.getWidth());
+                float fy = e.getY() / Math.max(1, v.getHeight());
+                if (fy > 0.58f && fy < 0.87f) {
+                    if (fx > 0.04f && fx < 0.50f) {          // ЖОҚ
+                        closeDialog();
+                    } else if (fx > 0.50f && fx < 0.96f) {   // ИӘ
+                        closeDialog();
+                        p.edit().putBoolean(Prefs.ENABLED, false).putBoolean(Prefs.HIDDEN, true).apply();
+                    }
+                }
+                return true;
             });
 
             dialog = dim;
             wm.addView(dim, lp(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, FLAGS));
+            card.setScaleX(0.85f);
+            card.setScaleY(0.85f);
+            card.setAlpha(0f);
+            card.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(160).start();
         } catch (Throwable ignored) { dialog = null; }
     }
 
