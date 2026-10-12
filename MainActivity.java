@@ -53,7 +53,7 @@ public class MainActivity extends Activity
 
     private Boolean shownActive = null;
     // басты экран элементтері
-    private TextView onBtn, offBtn, status, sumVal, kmPriceVal;
+    private TextView onBtn, offBtn, sumVal, kmPriceVal;
     private View accessCard, batteryCard;
     private Switch testSwitch;
     private Ui.BarDrawable redA, greenA, redB, greenB;
@@ -302,8 +302,6 @@ public class MainActivity extends Activity
         body.addView(onBtn, Ui.lp(MATCH, px(64), 0, px(10), 0, 0));
         body.addView(offBtn, Ui.lp(MATCH, px(64), 0, px(10), 0, 0));
 
-        status = Ui.center(Ui.text(this, "", 16, Ui.MUTED, true));
-        body.addView(status, Ui.lp(MATCH, WRAP, 0, px(10), 0, 0));
 
         // Сүзгі
         LinearLayout fc = Ui.card(this);
@@ -315,8 +313,9 @@ public class MainActivity extends Activity
         // Әзірлеуші
         LinearLayout dc = Ui.card(this);
         dc.setPadding(px(12), px(16), px(12), px(14));
-        dc.addView(Ui.center(Ui.text(this, "Қосымша керек пе?", 23, Ui.NAVY, true)));
-        TextView dn = Ui.center(Ui.text(this, "Әзірлеуші — Асхат", 17, Ui.MUTED, false));
+        dc.addView(Ui.center(Ui.text(this, "Өмірдің кез келген жағдайына\nқосымша керек пе?", 22, Ui.NAVY, true)));
+        TextView dn = Ui.center(Ui.text(this, "Төмендегі нөмір арқылы хабарласыңыз\nӘзірлеуші — Асхат", 16, Ui.MUTED, false));
+        dn.setLineSpacing(px(3), 1f);
         dn.setPadding(0, px(6), 0, 0);
         dc.addView(dn);
         TextView ph = Ui.center(Ui.text(this, PHONE_SHOWN, 31, Ui.NAVY_DARK, true));
@@ -466,9 +465,6 @@ public class MainActivity extends Activity
         // Белсенді күй — жасыл, екіншісі — қызыл (суреттегідей)
         onBtn.setBackground(on ? greenA : redA);
         offBtn.setBackground(on ? redB : greenB);
-        status.setText(on ? (Prefs.test(p) ? "● Тест: тапсырыс тексеріліп жатыр" : "● Тапсырыс ұсталып жатыр")
-                : "Тапсырыс ұсталмайды");
-        status.setTextColor(on ? Ui.GREEN : Ui.MUTED);
         sumVal.setText(Prefs.minSum(p) + " ₸");
         kmPriceVal.setText(Prefs.minPerKm(p) + " ₸");
         accessCard.setVisibility(serviceOn() ? View.GONE : View.VISIBLE);
