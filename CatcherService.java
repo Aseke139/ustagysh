@@ -3,11 +3,8 @@ package kz.askhat.ustagysh;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 import android.graphics.Path;
-import android.graphics.PixelFormat;
 import android.graphics.Rect;
-import android.graphics.drawable.GradientDrawable;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Handler;
@@ -15,14 +12,9 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
-import android.view.Gravity;
-import android.view.MotionEvent;
-import android.view.View;
-import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -52,9 +44,7 @@ public class CatcherService extends AccessibilityService
     private long lastKeyAt = 0;
     private long acceptedAt = 0;
 
-    private WindowManager wm;
-    private TextView bubble;
-    private WindowManager.LayoutParams bubbleLp;
+    private Overlays overlays;
 
     private final Runnable scanTask = () -> {
         scanPending = false;
@@ -73,7 +63,8 @@ public class CatcherService extends AccessibilityService
         prefs.registerOnSharedPreferenceChangeListener(this);
         try { tone = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100); } catch (Throwable ignored) {}
         vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-        showBubble();
+        overlays = new Overlays(this, prefs);
+        overlays.refresh();
     }
 
     @Override
@@ -275,75 +266,13 @@ public class CatcherService extends AccessibilityService
         return c == null ? "" : c.toString().trim();
     }
 
-    // ---------------- плавающая кнопка ----------------
-
-    private void showBubble() {
-        try {
-            wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-            bubble = new TextView(this);
-            bubble.setTextColor(Color.WHITE);
-            bubble.setTextSize(13);
-            bubble.setGravity(Gravity.CENTER);
-            int size = (int) (52 * getResources().getDisplayMetrics().density);
-            bubbleLp = new WindowManager.LayoutParams(size, size,
-                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                            | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                    PixelFormat.TRANSLUCENT);
-            bubbleLp.gravity = Gravity.TOP | Gravity.START;
-            bubbleLp.x = 0;
-            bubbleLp.y = (int) (220 * getResources().getDisplayMetrics().density);
-            bubble.setOnTouchListener(new View.OnTouchListener() {
-                float downX, downY; int startX, startY; boolean moved;
-                @Override
-                public boolean onTouch(View v, MotionEvent ev) {
-                    switch (ev.getActionMasked()) {
-                        case MotionEvent.ACTION_DOWN:
-                            downX = ev.getRawX(); downY = ev.getRawY();
-                            startX = bubbleLp.x; startY = bubbleLp.y; moved = false;
-                            return true;
-                        case MotionEvent.ACTION_MOVE:
-                            float dx = ev.getRawX() - downX, dy = ev.getRawY() - downY;
-                            if (Math.abs(dx) > 12 || Math.abs(dy) > 12) moved = true;
-                            if (moved) {
-                                bubbleLp.x = startX + (int) dx;
-                                bubbleLp.y = startY + (int) dy;
-                                wm.updateViewLayout(bubble, bubbleLp);
-                            }
-                            return true;
-                        case MotionEvent.ACTION_UP:
-                            if (!moved) {
-                                prefs.edit().putBoolean(Prefs.ENABLED, !Prefs.enabled(prefs)).apply();
-                            }
-                            return true;
-                    }
-                    return false;
-                }
-            });
-            wm.addView(bubble, bubbleLp);
-            paintBubble();
-        } catch (Throwable ignored) {
-            bubble = null;
-        }
-    }
-
-    private void paintBubble() {
-        if (bubble == null) return;
-        boolean on = Prefs.enabled(prefs);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.OVAL);
-        bg.setColor(on ? Color.parseColor("#2E9E44") : Color.parseColor("#8A8A8A"));
-        bg.setStroke(3, Color.WHITE);
-        bubble.setBackground(bg);
-        bubble.setText(on ? "ҚОС" : "ӨШ");
-        bubble.setAlpha(0.85f);
-    }
-
     @Override
     public void onSharedPreferenceChanged(SharedPreferences p, String key) {
-        if (Prefs.ENABLED.equals(key)) {
-            handler.post(this::paintBubble);
-            if (!Prefs.enabled(p)) { acceptedAt = 0; handler.removeCallbacks(scanTask); scanPending = false; }
+        if (overlays != null) handler.post(overlays::refresh);
+        if (Prefs.ENABLED.equals(key) && !Prefs.enabled(p)) {
+            acceptedAt = 0;
+            handler.removeCallbacks(scanTask);
+            scanPending = false;
         }
     }
 
@@ -354,7 +283,7 @@ public class CatcherService extends AccessibilityService
     public void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         if (prefs != null) prefs.unregisterOnSharedPreferenceChangeListener(this);
-        try { if (bubble != null) wm.removeView(bubble); } catch (Throwable ignored) {}
+        if (overlays != null) overlays.destroy();
         if (tone != null) tone.release();
         super.onDestroy();
     }

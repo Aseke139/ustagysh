@@ -4,120 +4,209 @@ import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.Button;
-import android.widget.CompoundButton;
+import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
 
-/** Главный экран: ползунок вкл/выкл и фильтр. Всё на казахском. */
-public class MainActivity extends Activity {
+/** Главный экран: батыр, кнопки ҚОСУ / ӨШІРУ, фильтр. Всё на казахском. */
+public class MainActivity extends Activity
+        implements SharedPreferences.OnSharedPreferenceChangeListener {
+
+    private static final int CREAM = Color.parseColor("#FBF6EA");
+    private static final int NAVY = Color.parseColor("#002B3D");
+    private static final int SKY = Color.parseColor("#00AFCA");
 
     private SharedPreferences p;
-    private TextView summary, access;
-    private Button accessBtn;
-    private Switch power;
+    private float dp;
+    private TextView summary, access, onBtn, offBtn;
+    private View accessCard;
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         p = Prefs.get(this);
-        float d = getResources().getDisplayMetrics().density;
-        int pad = (int) (20 * d);
+        dp = getResources().getDisplayMetrics().density;
+        getWindow().setStatusBarColor(NAVY);
 
-        LinearLayout col = new LinearLayout(this);
-        col.setOrientation(LinearLayout.VERTICAL);
-        col.setPadding(pad, pad, pad, pad);
-        col.setBackgroundColor(Color.WHITE);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(CREAM);
 
-        TextView title = text(getString(R.string.app_name), 24, true);
-        col.addView(title);
+        page.addView(header());
+        page.addView(new OrnamentView(this, NAVY), new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, px(30)));
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(px(14), px(8), px(14), px(20));
+        page.addView(body);
 
         // Рұқсат
-        access = text("", 15, false);
-        access.setPadding(0, (int) (12 * d), 0, (int) (4 * d));
-        col.addView(access);
-        accessBtn = new Button(this);
-        accessBtn.setText("Рұқсат беру");
+        LinearLayout ac = card();
+        access = text("Рұқсат жоқ. Төмендегі батырманы басып, «Тапсырыс ұстағыш» қызметін қосыңыз", 15, false);
+        access.setTextColor(Overlays.RED);
+        ac.addView(access);
+        TextView accessBtn = bigButton("Рұқсат беру", Overlays.RED);
         accessBtn.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
-        col.addView(accessBtn);
+        ac.addView(accessBtn, margins(0, 10, 0, 0));
+        accessCard = ac;
+        body.addView(ac);
 
-        // Негізгі ползунок
-        power = new Switch(this);
-        power.setTextSize(22);
-        power.setTypeface(Typeface.DEFAULT_BOLD);
-        power.setPadding(0, (int) (20 * d), 0, (int) (4 * d));
-        power.setChecked(Prefs.enabled(p));
-        power.setOnCheckedChangeListener((CompoundButton v, boolean on) -> {
-            p.edit().putBoolean(Prefs.ENABLED, on).apply();
-            refresh();
-        });
-        col.addView(power);
-
-        summary = text("", 15, false);
-        summary.setTextColor(Color.parseColor("#2E7D32"));
-        col.addView(summary);
+        // ҚОСУ / ӨШІРУ
+        LinearLayout pc = card();
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        onBtn = bigButton("ҚОСУ", Overlays.GREEN);
+        offBtn = bigButton("ӨШІРУ", Overlays.RED);
+        LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, px(64), 1f);
+        half.setMargins(0, 0, px(6), 0);
+        LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, px(64), 1f);
+        half2.setMargins(px(6), 0, 0, 0);
+        row.addView(onBtn, half);
+        row.addView(offBtn, half2);
+        onBtn.setOnClickListener(v -> Prefs.turnOn(p));
+        offBtn.setOnClickListener(v -> p.edit().putBoolean(Prefs.ENABLED, false).apply());
+        pc.addView(row);
+        summary = text("", 14, false);
+        summary.setPadding(0, px(10), 0, 0);
+        pc.addView(summary);
+        body.addView(pc);
 
         // Сынақ режимі
+        LinearLayout tc = card();
         Switch test = new Switch(this);
-        test.setText("Сынақ режимі: тек дыбыс береді, баспайды");
+        test.setText("Сынақ режимі\nтек дыбыс береді, ештеңе баспайды");
         test.setTextSize(15);
-        test.setPadding(0, (int) (16 * d), 0, (int) (8 * d));
+        test.setTextColor(Color.BLACK);
         test.setChecked(Prefs.test(p));
+        test.setThumbTintList(ColorStateList.valueOf(SKY));
         test.setOnCheckedChangeListener((v, on) -> p.edit().putBoolean(Prefs.TEST, on).apply());
-        col.addView(test);
+        tc.addView(test);
+        body.addView(tc);
 
-        // Фильтр
-        col.addView(slider("Ең аз сома", "Бұдан арзан тапсырыс алынбайды",
+        // Сүзгі
+        LinearLayout fc = card();
+        fc.addView(text("Сүзгі", 18, true));
+        fc.addView(slider("Ең аз сома", "Бұдан арзан тапсырыс алынбайды",
                 Prefs.MIN_SUM, Prefs.minSum(p), 50, 200, v -> v + " ₸"));
-        col.addView(slider("1 км бағасы", "Карточкадағы ₸/км осыдан кем болмасын",
+        fc.addView(slider("1 км бағасы", "Карточкадағы ₸/км осыдан кем болмасын",
                 Prefs.MIN_PER_KM, Prefs.minPerKm(p), 10, 100, v -> v + " ₸"));
-        col.addView(slider("Жолдың ұзындығы", "Бұдан ұзақ жол алынбайды",
+        fc.addView(slider("Жолдың ұзындығы", "Бұдан ұзақ жол алынбайды",
                 Prefs.MAX_KM, Prefs.maxKm(p), 1, Prefs.MAX_KM_LIMIT,
                 v -> v == 0 ? "шектеусіз" : v + " км-ге дейін"));
+        body.addView(fc);
+
+        // Подсказка про плавающие кнопки
+        LinearLayout hc = card();
+        hc.addView(text("Экрандағы батырмалар", 16, true));
+        TextView hint = text("Дөңгелек батыр батырмасын бассаңыз, ҚОСУ / ӨШІРУ тақтасы ашылады не жабылады.\n"
+                + "Тақтаны төмен сүйреп ✕-ке тастасаңыз, ол жасырылады.\n"
+                + "Батыр батырмасын ✕-ке тастасаңыз, қосымшадан шығу сұралады.", 14, false);
+        hint.setTextColor(Color.DKGRAY);
+        hint.setPadding(0, px(6), 0, 0);
+        hc.addView(hint);
+        body.addView(hc);
+
+        TextView footer = text("Жолың болсын, батыр!", 16, true);
+        footer.setGravity(Gravity.CENTER);
+        footer.setTextColor(NAVY);
+        footer.setPadding(0, px(12), 0, px(4));
+        body.addView(footer);
 
         ScrollView sv = new ScrollView(this);
-        sv.addView(col);
+        sv.setBackgroundColor(CREAM);
+        sv.addView(page);
         setContentView(sv);
-        refresh();
+    }
+
+    private View header() {
+        LinearLayout h = new LinearLayout(this);
+        h.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{SKY, Color.parseColor("#005F80"), NAVY});
+        h.setBackground(g);
+        h.setPadding(px(16), px(18), px(16), px(10));
+
+        TextView title = text(getString(R.string.app_name), 26, true);
+        title.setTextColor(Color.WHITE);
+        h.addView(title);
+        TextView sub = text("Тапсырысты бірінші ұста", 15, true);
+        sub.setTextColor(Overlays.GOLD);
+        h.addView(sub);
+
+        ImageView art = new ImageView(this);
+        art.setImageResource(R.drawable.batyr_banner);
+        art.setAdjustViewBounds(true);
+        art.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, px(190));
+        al.setMargins(0, px(8), 0, 0);
+        h.addView(art, al);
+        return h;
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (power != null) power.setChecked(Prefs.enabled(p));
+        p.registerOnSharedPreferenceChangeListener(this);
         refresh();
     }
+
+    @Override
+    protected void onPause() {
+        p.unregisterOnSharedPreferenceChangeListener(this);
+        super.onPause();
+    }
+
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
+        refresh();
+    }
+
+    private void refresh() {
+        boolean on = Prefs.enabled(p);
+        onBtn.setBackground(round(on ? Overlays.GREEN : Overlays.RED, 14));
+        offBtn.setBackground(round(on ? Overlays.RED : Overlays.GREEN, 14));
+        summary.setText(on ? Prefs.summary(p) : "Тапсырыс ұсталмайды");
+        summary.setTextColor(on ? Overlays.GREEN : Color.DKGRAY);
+        accessCard.setVisibility(serviceOn() ? View.GONE : View.VISIBLE);
+    }
+
+    // ---------- элементы ----------
 
     private interface Fmt { String f(int v); }
 
     private View slider(String name, String hint, String key, int value, int step, int maxSteps, Fmt fmt) {
-        float d = getResources().getDisplayMetrics().density;
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(0, (int) (18 * d), 0, 0);
-
-        TextView head = text(name + ": " + fmt.f(value), 18, true);
+        box.setPadding(0, px(14), 0, 0);
+        TextView head = text(name + ": " + fmt.f(value), 17, true);
+        head.setTextColor(NAVY);
         TextView sub = text(hint, 13, false);
         sub.setTextColor(Color.GRAY);
         SeekBar sb = new SeekBar(this);
         sb.setMax(maxSteps);
         sb.setProgress(value / step);
+        sb.setProgressTintList(ColorStateList.valueOf(Overlays.GOLD));
+        sb.setThumbTintList(ColorStateList.valueOf(SKY));
         sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int prog, boolean user) {
                 int v = prog * step;
                 head.setText(name + ": " + fmt.f(v));
-                p.edit().putInt(key, v).apply();
-                refresh();
+                if (user) p.edit().putInt(key, v).apply();
             }
             @Override public void onStartTrackingTouch(SeekBar s) {}
             @Override public void onStopTrackingTouch(SeekBar s) {}
@@ -126,6 +215,42 @@ public class MainActivity extends Activity {
         box.addView(sub);
         box.addView(sb);
         return box;
+    }
+
+    private LinearLayout card() {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setPadding(px(16), px(14), px(16), px(14));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.WHITE);
+        bg.setCornerRadius(px(16));
+        bg.setStroke(px(1), Color.parseColor("#E8D9A8"));
+        c.setBackground(bg);
+        c.setLayoutParams(margins(0, 10, 0, 0));
+        return c;
+    }
+
+    private TextView bigButton(String s, int color) {
+        TextView t = text(s, 20, true);
+        t.setTextColor(Color.WHITE);
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(px(8), px(14), px(8), px(14));
+        t.setBackground(round(color, 14));
+        return t;
+    }
+
+    private GradientDrawable round(int color, int r) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(px(r));
+        return d;
+    }
+
+    private LinearLayout.LayoutParams margins(int l, int t, int r, int b) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(px(l), px(t), px(r), px(b));
+        return lp;
     }
 
     private TextView text(String s, int sp, boolean bold) {
@@ -137,24 +262,15 @@ public class MainActivity extends Activity {
         return t;
     }
 
-    private void refresh() {
-        boolean on = Prefs.enabled(p);
-        power.setText(on ? "Қосулы" : "Өшірулі");
-        summary.setText(on ? Prefs.summary(p) : "Тапсырыс ұсталмайды");
-        boolean ok = serviceOn();
-        access.setText(ok ? "Рұқсат бар ✓" : "Рұқсат жоқ. Батырманы басып, «Тапсырыс ұстағыш» қызметін қосыңыз");
-        access.setTextColor(ok ? Color.parseColor("#2E7D32") : Color.RED);
-        accessBtn.setVisibility(ok ? View.GONE : View.VISIBLE);
-    }
+    private int px(float v) { return (int) (v * dp); }
 
     private boolean serviceOn() {
         String list = Settings.Secure.getString(getContentResolver(),
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
         if (TextUtils.isEmpty(list)) return false;
-        String me = new ComponentName(this, CatcherService.class).flattenToString();
-        String meShort = new ComponentName(this, CatcherService.class).flattenToShortString();
+        ComponentName cn = new ComponentName(this, CatcherService.class);
         for (String s : list.split(":")) {
-            if (s.equalsIgnoreCase(me) || s.equalsIgnoreCase(meShort)) return true;
+            if (s.equalsIgnoreCase(cn.flattenToString()) || s.equalsIgnoreCase(cn.flattenToShortString())) return true;
         }
         return false;
     }
