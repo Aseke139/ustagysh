@@ -154,19 +154,9 @@ public class CatcherService extends AccessibilityService
             }
             if (reason != null) return;
 
-            if (click(btn)) {
-                acceptedAt = SystemClock.uptimeMillis();
-                etaTries = 0;
-                etaSeen = false;
-                lastEtaTapAt = 0;
-                final long mark = acceptedAt;
-                beep(true);
-                vibrate();
-                handler.postDelayed(scanTask, 300);
-                handler.postDelayed(() -> {
-                    if (acceptedAt == mark && !etaSeen) { acceptedAt = 0; reportEtaMiss(); }
-                }, 6000);
-            }
+                      beep(true);
+            vibrate();
+            toast("ТИІМДІ! " + o);
             return;
         }
     }
