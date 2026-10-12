@@ -50,7 +50,7 @@ public final class License {
 
     /** true — кілт дұрыс, сақталды. */
     public static boolean activate(Context c, String key) {
-        String k = clean(key);
+        String k = extract(key);
         if (k.length() != 8 || !k.equals(clean(keyFor(deviceCode(c))))) return false;
         Prefs.get(c).edit().putString(Prefs.LICENSE, format(k)).apply();
         return true;
@@ -60,14 +60,36 @@ public final class License {
         return hex(sha256("ustagysh-pin:" + (pin == null ? "" : pin.trim()))).equals(PIN_HASH);
     }
 
+    /** Кирилшемен терілген ұқсас әріптер латынға айналады (К→K, Р→P, ...). */
+    private static final String CYR = "АВЕКМНОРСТУХ";
+    private static final String LAT = "ABEKMHOPCTYX";
+
     /** Тек әріп пен сан, бас әріппен. */
     public static String clean(String s) {
         if (s == null) return "";
         StringBuilder b = new StringBuilder();
         for (char ch : s.toUpperCase(java.util.Locale.ROOT).toCharArray()) {
+            int i = CYR.indexOf(ch);
+            if (i >= 0) ch = LAT.charAt(i);
             if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) b.append(ch);
         }
         return b.toString();
+    }
+
+    /** Кез келген мәтіннен кодты/кілтті табу: «... кілті: SMT5-Y3WR» → SMT5Y3WR. */
+    public static String extract(String s) {
+        if (s == null) return "";
+        StringBuilder u = new StringBuilder();
+        for (char ch : s.toUpperCase(java.util.Locale.ROOT).toCharArray()) {
+            int i = CYR.indexOf(ch);
+            u.append(i >= 0 ? LAT.charAt(i) : ch);
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("[A-Z0-9]{4}\\s*[-\u2013\u2014]?\\s*[A-Z0-9]{4}(?![A-Z0-9])").matcher(u);
+        String last = null;
+        while (m.find()) last = m.group();
+        String c = clean(last != null ? last : u.toString());
+        return c.length() > 8 ? c.substring(0, 8) : c;
     }
 
     public static String format(String s) {

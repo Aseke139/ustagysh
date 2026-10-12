@@ -200,7 +200,6 @@ public class MainActivity extends Activity
         e.setSingleLine(true);
         e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
                 | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
-        e.setFilters(new InputFilter[]{new InputFilter.LengthFilter(9)});
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(Color.WHITE);
         bg.setCornerRadius(px(12));
@@ -213,8 +212,7 @@ public class MainActivity extends Activity
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void afterTextChanged(Editable s) {
                 if (busy) return;
-                String f = License.format(s.toString());
-                if (f.length() > 9) f = f.substring(0, 9);
+                String f = License.format(License.extract(s.toString()));
                 if (!f.equals(s.toString())) {
                     busy = true;
                     s.replace(0, s.length(), f);
@@ -558,7 +556,7 @@ public class MainActivity extends Activity
     }
 
     private void showKey(String rawCode) {
-        String code = License.format(rawCode);
+        String code = License.format(License.extract(rawCode));
         String key = License.keyFor(code);
         if (key.isEmpty()) {
             Toast.makeText(this, "Код 8 таңбадан тұруы керек", Toast.LENGTH_LONG).show();
