@@ -35,6 +35,13 @@ public final class Prefs {
         p.edit().putBoolean(ENABLED, true).putBoolean(HIDDEN, false).apply();
     }
 
+    /** Строка фильтра для плавающей кнопки. */
+    public static String label(SharedPreferences p) {
+        String s = "Баға " + minSum(p) + " ₸+\n1 км " + minPerKm(p) + " ₸+";
+        if (maxKm(p) > 0) s += "\nЖол " + maxKm(p) + " км-ге дейін";
+        return s;
+    }
+
     public static String summary(SharedPreferences p) {
         String km = maxKm(p) > 0 ? " · " + maxKm(p) + " км-ге дейін" : "";
         return minSum(p) + " ₸-дан, 1 км " + minPerKm(p) + " ₸-дан қымбат тапсырыстар алынады" + km;
