@@ -28,7 +28,8 @@ public final class Prefs {
     public static boolean test(SharedPreferences p) { return p.getBoolean(TEST, true); }
     public static int minSum(SharedPreferences p) { return p.getInt(MIN_SUM, 700); }
     public static int minPerKm(SharedPreferences p) { return p.getInt(MIN_PER_KM, 150); }
-    public static int maxKm(SharedPreferences p) { return p.getInt(MAX_KM, 0); }
+    /** Жол ұзындығы сүзгісі алынып тасталды: әрқашан шектеусіз. */
+    public static int maxKm(SharedPreferences p) { return 0; }
     public static boolean hidden(SharedPreferences p) { return p.getBoolean(HIDDEN, false); }
     public static boolean panel(SharedPreferences p) { return p.getBoolean(PANEL, true); }
 

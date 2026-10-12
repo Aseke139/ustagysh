@@ -53,7 +53,7 @@ public class MainActivity extends Activity
 
     private Boolean shownActive = null;
     // басты экран элементтері
-    private TextView onBtn, offBtn, status, sumVal, kmPriceVal, kmVal;
+    private TextView onBtn, offBtn, status, sumVal, kmPriceVal;
     private View accessCard, batteryCard;
     private Switch testSwitch;
     private Ui.BarDrawable redA, greenA, redB, greenB;
@@ -310,7 +310,6 @@ public class MainActivity extends Activity
         fc.setPadding(px(14), px(10), px(14), px(14));
         sumVal = stepper(fc, "Баға", Prefs.MIN_SUM, 50, 0, 10000);
         kmPriceVal = stepper(fc, "1 км бағасы", Prefs.MIN_PER_KM, 10, 0, 1000);
-        kmVal = stepper(fc, "Жолдың ұзындығы", Prefs.MAX_KM, 1, 0, Prefs.MAX_KM_LIMIT);
         body.addView(fc, Ui.lp(MATCH, WRAP, 0, px(10), 0, 0));
 
         // Әзірлеуші
@@ -385,13 +384,20 @@ public class MainActivity extends Activity
         row.setGravity(Gravity.CENTER_VERTICAL);
         ImageView minus = Ui.imageButton(this, R.drawable.btn_minus);
         ImageView plus = Ui.imageButton(this, R.drawable.btn_plus);
-        TextView val = Ui.center(Ui.text(this, "", 36, Ui.NAVY_DARK, true));
+        // Ортасында: сан, астында «және одан жоғары»
+        LinearLayout mid = new LinearLayout(this);
+        mid.setOrientation(LinearLayout.VERTICAL);
+        mid.setGravity(Gravity.CENTER);
+        mid.setBackground(Ui.glow(this));
+        TextView val = Ui.center(Ui.text(this, "", 34, Ui.NAVY_DARK, true));
         val.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
-        val.setBackground(Ui.glow(this));
         val.setSingleLine(true);
-        val.setAutoSizeTextTypeUniformWithConfiguration(16, 36, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        val.setAutoSizeTextTypeUniformWithConfiguration(16, 34, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        mid.addView(val, new LinearLayout.LayoutParams(MATCH, px(42)));
+        TextView up = Ui.center(Ui.text(this, "және одан жоғары", 13, Ui.GOLD, true));
+        mid.addView(up, new LinearLayout.LayoutParams(MATCH, WRAP));
         row.addView(minus, new LinearLayout.LayoutParams(px(76), px(54)));
-        row.addView(val, new LinearLayout.LayoutParams(0, px(62), 1f));
+        row.addView(mid, new LinearLayout.LayoutParams(0, px(68), 1f));
         row.addView(plus, new LinearLayout.LayoutParams(px(76), px(54)));
         parent.addView(row);
 
@@ -465,7 +471,6 @@ public class MainActivity extends Activity
         status.setTextColor(on ? Ui.GREEN : Ui.MUTED);
         sumVal.setText(Prefs.minSum(p) + " ₸");
         kmPriceVal.setText(Prefs.minPerKm(p) + " ₸");
-        kmVal.setText(Prefs.maxKm(p) == 0 ? "шектеусіз" : Prefs.maxKm(p) + " км");
         accessCard.setVisibility(serviceOn() ? View.GONE : View.VISIBLE);
         batteryCard.setVisibility(batteryOk() ? View.GONE : View.VISIBLE);
         if (testSwitch.isChecked() != Prefs.test(p)) testSwitch.setChecked(Prefs.test(p));
