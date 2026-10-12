@@ -43,6 +43,9 @@ public class CatcherService extends AccessibilityService
     private String lastKey = "";
     private long lastKeyAt = 0;
     private long acceptedAt = 0;
+    private long lastEtaTapAt = 0;
+    private int etaTries = 0;
+    private boolean etaSeen = false;
 
     private Overlays overlays;
 
@@ -85,16 +88,37 @@ public class CatcherService extends AccessibilityService
 
     private void scan() {
         if (!Prefs.enabled(prefs)) return;
-        for (AccessibilityNodeInfo root : inDriveRoots()) {
-            long now = SystemClock.uptimeMillis();
+        List<AccessibilityNodeInfo> roots = inDriveRoots();
+        long now = SystemClock.uptimeMillis();
 
-            // Шаг 2: после принятия выбираем минимальное время
-            if (now - acceptedAt < ETA_WINDOW_MS && pickMinEta(root)) {
-                acceptedAt = 0;
+        // Шаг 2: после принятия — окно «Как скоро вы прибудете?» во ВСЕХ окнах inDrive
+        if (acceptedAt > 0 && now - acceptedAt < ETA_WINDOW_MS) {
+            AccessibilityNodeInfo eta = null;
+            for (AccessibilityNodeInfo root : roots) {
+                eta = findMinEta(root);
+                if (eta != null) break;
+            }
+            if (eta != null) {
+                etaSeen = true;
+                if (now - lastEtaTapAt > 700 && etaTries < 5) {
+                    etaTries++;
+                    lastEtaTapAt = now;
+                    if (etaTries <= 2) tap(eta); else click(eta);
+                    handler.removeCallbacks(scanTask);
+                    scanPending = true;
+                    handler.postDelayed(scanTask, 800); // проверить, закрылось ли окно
+                }
                 return;
             }
+            if (etaTries > 0) { // нажимали, окна больше нет — готово
+                acceptedAt = 0;
+                etaTries = 0;
+                return;
+            }
+        }
 
-            // Шаг 1: всплывающая карточка
+        // Шаг 1: всплывающая карточка заказа
+        for (AccessibilityNodeInfo root : roots) {
             AccessibilityNodeInfo btn = findAccept(root);
             if (btn == null) continue;
 
@@ -103,7 +127,7 @@ public class CatcherService extends AccessibilityService
             if (!hasSkip(texts)) continue; // не карточка заказа — не трогаем
 
             OrderParser.Order o = OrderParser.parse(texts, String.valueOf(btn.getText()));
-            if (o.key.equals(lastKey) && now - lastKeyAt < SAME_CARD_MS) return;
+            if (o.key.equals(lastKey) && now - lastKeyAt < SAME_CARD_MS) continue;
             lastKey = o.key;
             lastKeyAt = now;
 
@@ -119,11 +143,15 @@ public class CatcherService extends AccessibilityService
 
             if (click(btn)) {
                 acceptedAt = SystemClock.uptimeMillis();
+                etaTries = 0;
+                etaSeen = false;
+                lastEtaTapAt = 0;
                 final long mark = acceptedAt;
                 beep(true);
                 vibrate();
+                handler.postDelayed(scanTask, 300);
                 handler.postDelayed(() -> {
-                    if (acceptedAt == mark) { acceptedAt = 0; reportEtaMiss(); }
+                    if (acceptedAt == mark && !etaSeen) { acceptedAt = 0; reportEtaMiss(); }
                 }, 6000);
             }
             return;
@@ -184,8 +212,8 @@ public class CatcherService extends AccessibilityService
         return false;
     }
 
-    /** Окно «Как скоро вы прибудете?» — нажать самое маленькое время. */
-    private boolean pickMinEta(AccessibilityNodeInfo root) {
+    /** Окно «Как скоро вы прибудете?» — найти кнопку с самым маленьким временем. */
+    private AccessibilityNodeInfo findMinEta(AccessibilityNodeInfo root) {
         List<AccessibilityNodeInfo> all = new ArrayList<>();
         List<Integer> mins = new ArrayList<>();
         List<AccessibilityNodeInfo> stack = new ArrayList<>();
@@ -205,11 +233,10 @@ public class CatcherService extends AccessibilityService
             if (m > 0 && n.isVisibleToUser()) { all.add(n); mins.add(m); }
             for (int i = 0; i < n.getChildCount(); i++) stack.add(n.getChild(i));
         }
-        // окно времени: заголовок найден, или видно минимум две кнопки «N мин.»
-        if (all.isEmpty() || (!isEtaScreen && all.size() < 2)) return false;
+        if (all.isEmpty() || (!isEtaScreen && all.size() < 2)) return null;
         int best = 0;
         for (int i = 1; i < mins.size(); i++) if (mins.get(i) < mins.get(best)) best = i;
-        return click(all.get(best));
+        return all.get(best);
     }
 
     /** Если окно времени не распознано — показать, что видно на экране (для настройки). */
@@ -226,6 +253,19 @@ public class CatcherService extends AccessibilityService
     }
 
     // ---------------- нажатие ----------------
+
+    /** Касание пальцем точно по центру самой надписи (она в середине своей кнопки). */
+    private boolean tap(AccessibilityNodeInfo node) {
+        Rect r = new Rect();
+        node.getBoundsInScreen(r);
+        if (r.isEmpty()) return false;
+        Path p = new Path();
+        p.moveTo(r.exactCenterX(), r.exactCenterY());
+        GestureDescription g = new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(p, 0, 80))
+                .build();
+        return dispatchGesture(g, null, null);
+    }
 
     private boolean click(AccessibilityNodeInfo node) {
         AccessibilityNodeInfo n = node;
