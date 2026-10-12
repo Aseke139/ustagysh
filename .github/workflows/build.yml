@@ -14,10 +14,13 @@ jobs:
         run: |
           set -e
           J=app/src/main/java/kz/askhat/ustagysh
-          mkdir -p $J app/src/main/res/values app/src/main/res/xml
-          mv CatcherService.java MainActivity.java OrderParser.java Prefs.java $J/
+          R=app/src/main/res
+          mkdir -p $J $R/values $R/xml $R/drawable $R/mipmap-anydpi-v26
+          mv *.java $J/
           mv AndroidManifest.xml app/src/main/
-          mv catcher_config.xml app/src/main/res/xml/
+          mv catcher_config.xml $R/xml/
+          mv batyr_banner.xml batyr_icon.xml ic_launcher_bg.xml $R/drawable/
+          mv ic_launcher.xml $R/mipmap-anydpi-v26/
           rm -f build.gradle settings.gradle gradle.properties
           cat > app/src/main/res/values/strings.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -57,8 +60,19 @@ jobs:
                   applicationId 'kz.askhat.ustagysh'
                   minSdk 26
                   targetSdk 34
-                  versionCode 1
-                  versionName '1.0'
+                  versionCode 3
+                  versionName '1.2'
+              }
+              signingConfigs {
+                  fixed {
+                      storeFile rootProject.file('ustagysh.jks')
+                      storePassword 'ustagysh123'
+                      keyAlias 'ustagysh'
+                      keyPassword 'ustagysh123'
+                  }
+              }
+              buildTypes {
+                  debug { signingConfig signingConfigs.fixed }
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
